@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #f8f8f4;
+  --color-surface: #ffffff;
+  --color-border: #e6e6df;
+  --color-fg: #14140f;
+  --color-muted: #6b6b66;
+  --color-accent: #14624a;
+  --color-accent-soft: #e2efea;
+  --color-positive: #14624a;
+  --color-negative: #b3261e;
+  --color-warning: #b07a00;
+
+  --color-c1: #14624a;
+  --color-c2: #2a8da7;
+  --color-c3: #6c5ce7;
+  --color-c4: #d97706;
+  --color-c5: #be185d;
+  --color-c6: #475569;
+  --color-c7: #047857;
+  --color-c8: #b45309;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+  --color-bg: #0c0d0a;
+  --color-surface: #161814;
+  --color-border: #292c26;
+  --color-fg: #f3f3ee;
+  --color-muted: #9c9c93;
+  --color-accent: #5fc59a;
+  --color-accent-soft: #1c3b32;
+  --color-positive: #5fc59a;
+  --color-negative: #ef6b64;
+  --color-warning: #e8b14d;
+
+  /* Brighter chart palette for dark mode — the light-mode palette is too
+     saturated/dark to read on a dark surface. */
+  --color-c1: #5fc59a;
+  --color-c2: #5fb8d4;
+  --color-c3: #a78bfa;
+  --color-c4: #fbbf24;
+  --color-c5: #f472b6;
+  --color-c6: #94a3b8;
+  --color-c7: #34d399;
+  --color-c8: #fb923c;
+}
+
+html, body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+    ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Calmer focus ring */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+}
+
+.input {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.95rem;
+  color: var(--color-fg);
+  width: 100%;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.input::placeholder { color: color-mix(in srgb, var(--color-muted) 80%, transparent); }
+.input:focus {
+  border-color: var(--color-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-fg);
+  font-weight: 500;
+  font-size: 0.9rem;
+  letter-spacing: -0.005em;
+  transition: background-color 0.12s ease, border-color 0.12s ease,
+    transform 0.08s ease, color 0.12s ease;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: color-mix(in srgb, var(--color-fg) 25%, var(--color-border));
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary {
+  background-color: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+.btn-primary:hover {
+  background-color: color-mix(in srgb, var(--color-accent) 88%, black);
+  border-color: color-mix(in srgb, var(--color-accent) 88%, black);
+}
+.btn-danger {
+  background-color: var(--color-negative);
+  border-color: var(--color-negative);
+  color: white;
+}
+.btn-danger:hover {
+  background-color: color-mix(in srgb, var(--color-negative) 88%, black);
+  border-color: color-mix(in srgb, var(--color-negative) 88%, black);
+}
+.btn-ghost {
+  background-color: transparent;
+  border-color: transparent;
+}
+.btn-ghost:hover {
+  background-color: color-mix(in srgb, var(--color-fg) 7%, transparent);
+}
+
+.label {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  font-weight: 500;
+  margin-bottom: 0.3rem;
+  display: block;
+  letter-spacing: 0.005em;
+}
+
+.muted { color: var(--color-muted); }
+.positive { color: var(--color-positive); }
+.negative { color: var(--color-negative); }
