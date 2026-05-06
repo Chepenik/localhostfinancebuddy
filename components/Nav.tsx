@@ -7,6 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 const TABS = [
   { href: "/", label: "Dashboard" },
   { href: "/entries", label: "Entries" },
+  { href: "/insights", label: "Insights" },
   { href: "/settings", label: "Settings" },
 ];
 
