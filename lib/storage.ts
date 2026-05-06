@@ -106,9 +106,25 @@ export interface ImportResult {
   error?: string;
   imported: number;
   skipped: number;
+  versionMismatch?: boolean;
 }
 
+// Hard cap on the JSON blob we're willing to parse. The app stores hundreds
+// of items at most; anything past 4 MB is almost certainly the wrong file
+// (or a malformed export) and could freeze the tab during JSON.parse.
+const MAX_IMPORT_BYTES = 4 * 1024 * 1024;
+// Hard cap on the number of entries we'll accept in one import.
+const MAX_IMPORT_ENTRIES = 50_000;
+
 export function importJson(raw: string): ImportResult {
+  if (raw.length > MAX_IMPORT_BYTES) {
+    return {
+      ok: false,
+      error: "That file is unusually large for a Finance Buddy backup. Pick the right export and try again.",
+      imported: 0,
+      skipped: 0,
+    };
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -118,7 +134,7 @@ export function importJson(raw: string): ImportResult {
   if (!parsed || typeof parsed !== "object") {
     return { ok: false, error: "That file isn't a Finance Buddy backup.", imported: 0, skipped: 0 };
   }
-  const obj = parsed as { entries?: unknown };
+  const obj = parsed as { entries?: unknown; version?: unknown };
   if (!Array.isArray(obj.entries)) {
     return {
       ok: false,
@@ -127,6 +143,19 @@ export function importJson(raw: string): ImportResult {
       skipped: 0,
     };
   }
+  if (obj.entries.length > MAX_IMPORT_ENTRIES) {
+    return {
+      ok: false,
+      error: `That file has ${obj.entries.length.toLocaleString()} entries, which is more than this app is built to handle.`,
+      imported: 0,
+      skipped: 0,
+    };
+  }
+  // Soft schema check. Older or future files may not have version === 1; we
+  // still try to import them (coerceEntry is the real gate), but we return a
+  // signal so the UI can show a friendly note.
+  const versionMismatch =
+    obj.version !== undefined && obj.version !== 1;
 
   let skipped = 0;
   const entries: Entry[] = [];
@@ -140,7 +169,12 @@ export function importJson(raw: string): ImportResult {
   if (!result.ok) {
     return { ok: false, error: result.error, imported: 0, skipped };
   }
-  return { ok: true, imported: entries.length, skipped };
+  return {
+    ok: true,
+    imported: entries.length,
+    skipped,
+    versionMismatch,
+  };
 }
 
 export function newId(): string {

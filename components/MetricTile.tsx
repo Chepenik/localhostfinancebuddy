@@ -3,9 +3,12 @@ interface Props {
   value: string;
   hint?: string;
   tone?: "default" | "positive" | "negative";
+  // Optional plain-language definition. Renders as an accessible disclosure
+  // ("What's this?") under the hint. Native <details> — no JS required.
+  definition?: string;
 }
 
-export function MetricTile({ label, value, hint, tone = "default" }: Props) {
+export function MetricTile({ label, value, hint, tone = "default", definition }: Props) {
   const valueColor =
     tone === "positive"
       ? "var(--color-positive)"
@@ -22,6 +25,18 @@ export function MetricTile({ label, value, hint, tone = "default" }: Props) {
         {value}
       </div>
       {hint && <div className="mt-1 text-xs muted">{hint}</div>}
+      {definition && (
+        <details className="mt-2 group">
+          <summary
+            className="cursor-pointer list-none text-xs font-medium select-none"
+            style={{ color: "var(--color-accent)" }}
+          >
+            <span className="group-open:hidden">What&apos;s this?</span>
+            <span className="hidden group-open:inline">Hide</span>
+          </summary>
+          <p className="mt-1.5 text-xs muted leading-relaxed">{definition}</p>
+        </details>
+      )}
     </div>
   );
 }

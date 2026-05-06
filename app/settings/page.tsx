@@ -40,14 +40,18 @@ export default function SettingsPage() {
     const text = await file.text();
     const result = importJson(text);
     if (result.ok) {
-      const skippedNote =
-        result.skipped > 0
-          ? ` Skipped ${result.skipped} item${result.skipped === 1 ? "" : "s"} that didn't look right.`
-          : "";
-      setMessage({
-        tone: "ok",
-        text: `Imported ${result.imported} item${result.imported === 1 ? "" : "s"}.${skippedNote}`,
-      });
+      const parts: string[] = [
+        `Imported ${result.imported} item${result.imported === 1 ? "" : "s"}.`,
+      ];
+      if (result.skipped > 0) {
+        parts.push(
+          `Skipped ${result.skipped} item${result.skipped === 1 ? "" : "s"} that didn't look right.`,
+        );
+      }
+      if (result.versionMismatch) {
+        parts.push("File version was unfamiliar but the entries imported cleanly.");
+      }
+      setMessage({ tone: "ok", text: parts.join(" ") });
     } else {
       setMessage({ tone: "err", text: `Couldn't import: ${result.error}` });
     }
@@ -105,12 +109,28 @@ export default function SettingsPage() {
 
       <section className="card p-6">
         <h2 className="text-sm font-semibold">Privacy</h2>
-        <p className="mt-1 text-sm muted">
-          All your data lives only in this browser&apos;s <code>localStorage</code>. Nothing is
-          ever sent to a server. To move your data to another browser or device, export and
-          import using the buttons below.
+        <p className="mt-2 text-sm">
+          All your entries live only in this browser&apos;s <code>localStorage</code>{" "}
+          under <code>lfb:state:v1</code>. Nothing is ever sent to a server &mdash; this
+          app does not have a server. Open your browser&apos;s Network tab and watch:
+          adding entries, switching themes, and viewing the dashboard make zero
+          network calls.
         </p>
-        <p className="mt-2 text-sm muted">
+        <p className="mt-3 text-sm muted">
+          <strong>Local-first is not the same as encrypted.</strong> Anyone with access
+          to this device or browser profile &mdash; including other apps and aggressive
+          browser extensions &mdash; can read the stored JSON. If that matters for your
+          situation, consider a dedicated browser profile for this app, full-disk
+          encryption, or simply not entering numbers you wouldn&apos;t want a thief
+          with your laptop to see.
+        </p>
+        <p className="mt-3 text-sm muted">
+          The optional AI Insights feature is the <em>only</em> place this app makes a
+          network request, and only when you explicitly click <em>Generate</em>. The AI
+          API key is stored separately from your entries and is never included in
+          backups, exports, or error messages.
+        </p>
+        <p className="mt-3 text-sm muted">
           {hydrated ? (
             <>
               You currently have <strong>{entries.length}</strong>{" "}
@@ -125,8 +145,10 @@ export default function SettingsPage() {
       <section className="card p-6">
         <h2 className="text-sm font-semibold">Backup &amp; restore</h2>
         <p className="mt-1 text-sm muted">
-          Export downloads a single JSON file. Import replaces everything you have on this
-          device with the file&apos;s contents.
+          Export downloads a single JSON file you can read, edit, or version-control.
+          Import replaces everything you have on this device with the file&apos;s
+          contents. Files larger than 4&nbsp;MB or with more than 50,000 entries are
+          rejected as a safety check.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button className="btn btn-primary" onClick={handleExport}>
@@ -152,8 +174,8 @@ export default function SettingsPage() {
       <section className="card p-6">
         <h2 className="text-sm font-semibold">Demo data</h2>
         <p className="mt-1 text-sm muted">
-          Want to try the app without entering your own numbers? Load a small set of realistic
-          example entries to explore. You can clear them anytime.
+          Want to try the app without entering your own numbers? Load a small set of
+          realistic example entries to explore. You can clear them anytime.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button className="btn" onClick={handleLoadDemo}>
@@ -172,11 +194,13 @@ export default function SettingsPage() {
           Danger zone
         </h2>
         <p className="mt-1 text-sm muted">
-          Permanently deletes everything on this device. Export first if you might want it back.
+          Permanently deletes every entry on this device. Export first if you might want
+          it back. The optional AI Insights key (if you saved one) is also wiped on the
+          Insights tab&apos;s &ldquo;Forget key&rdquo; button, not here.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button className="btn btn-danger" onClick={handleClear}>
-            Clear all local data
+            Clear all entries
           </button>
         </div>
       </section>
@@ -203,6 +227,54 @@ export default function SettingsPage() {
           {message.text}
         </div>
       )}
+
+      <CreatorCard />
     </div>
+  );
+}
+
+function CreatorCard() {
+  return (
+    <section className="card p-6">
+      <h2 className="text-sm font-semibold">More from the creator</h2>
+      <p className="mt-1 text-xs muted">Optional. No tracking, just two friendly links.</p>
+      <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+        <li
+          className="rounded-2xl border p-4"
+          style={{ borderColor: "var(--color-border)" }}
+        >
+          <a
+            href="https://bitcoincoloring.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-semibold hover:underline"
+            style={{ color: "var(--color-accent)" }}
+          >
+            The Bitcoin Coloring Book →
+          </a>
+          <p className="mt-1 text-xs muted leading-relaxed">
+            Want to teach your children about sound money? Check out{" "}
+            <em>The Bitcoin Coloring Book</em>.
+          </p>
+        </li>
+        <li
+          className="rounded-2xl border p-4"
+          style={{ borderColor: "var(--color-border)" }}
+        >
+          <a
+            href="https://binmucker.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-semibold hover:underline"
+            style={{ color: "var(--color-accent)" }}
+          >
+            Binmucker →
+          </a>
+          <p className="mt-1 text-xs muted leading-relaxed">
+            Enjoy this project? Check out more of my experiments at Binmucker.
+          </p>
+        </li>
+      </ul>
+    </section>
   );
 }

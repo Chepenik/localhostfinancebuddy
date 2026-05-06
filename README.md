@@ -21,6 +21,7 @@ view of your money that's useful even if you only ever enter five things.
 - Visualize **where your money goes** and **what you own** with simple pie charts
 - See your **assets vs. liabilities split** as a single proportional bar
 - Get a friendly **financial-health read** ("Looking great" → "A bit tight")
+- Read **plain-language observations** (cash flow, savings rate, emergency-fund estimate, debt load, expense concentration) — generated locally, with no AI and no network call
 - **Export & import** your data as JSON for backups or moving between browsers
 - **Load demo data** with one click to explore without entering your own numbers
 - **Wipe all data** with a confirmation step
@@ -64,7 +65,7 @@ npm run build       # production build (Next.js + Turbopack)
 npm run start       # serve the built app
 npm run lint        # ESLint
 npm run typecheck   # tsc --noEmit
-npm run validate    # 38 assertions over the finance + storage logic
+npm run validate    # 55 assertions over the finance, observations, and insights logic
 ```
 
 ---
@@ -116,6 +117,49 @@ in sync. Reads use `useSyncExternalStore` so SSR + hydration don't flicker.
 
 ---
 
+## AI Insights (optional, off by default)
+
+There is an opt-in **AI Insights** tab that can turn your numbers into a short
+plain-English summary using your **own** AI API key. Nothing happens
+automatically — you have to type a key, click *Generate*, and you can see the
+exact JSON that will leave the browser before it does.
+
+- **Optional.** Off by default. The feature does nothing until you visit the
+  Insights tab and click Generate.
+- **Bring your own key.** The app does not ship with a key, does not proxy
+  through any server, and does not have a server. The key is held in this
+  tab's `sessionStorage` (gone when you close it) unless you explicitly tick
+  *Remember on this device*, which mirrors it to `localStorage`.
+  **Browser storage is not a secure vault** — anyone with access to this
+  device or browser profile can read it. The app warns you about this in the
+  UI.
+- **Minimized payload.** Only top-line aggregates leave your browser:
+  net worth, monthly income, monthly expenses, monthly cash flow, savings
+  rate, total assets, total liabilities, debt-to-asset ratio, entry count,
+  and an ISO timestamp. Optionally — only if you tick the box — the payload
+  also includes per-category totals (e.g. *Housing $1,850/mo*) using the
+  predefined category labels.
+- **Excluded by default.** Entry names, notes, IDs, timestamps, account /
+  bank / employer names, and the raw `localStorage` blob are **never** part
+  of the payload. The validation script asserts this.
+- **Default provider: OpenRouter + Kimi K2.** The base URL defaults to
+  `https://openrouter.ai/api/v1` and the model to `moonshotai/kimi-k2`. Both
+  fields are editable — you can pin a specific Kimi version (e.g.
+  `moonshotai/kimi-k2-0905`) or swap the provider entirely.
+- **Privacy-focused providers welcome.** The provider field is just an
+  OpenAI-compatible base URL, so you can point it at a local model server
+  (Ollama at `http://localhost:11434/v1`, LM Studio at
+  `http://localhost:1234/v1`, llama.cpp's OpenAI compat, etc.) and the
+  payload never leaves your machine.
+- **Not financial advice.** The system prompt explicitly forbids the model
+  from recommending specific investments, securities, funds, or trades. Any
+  response is a summary of the numbers you provided, not advice.
+
+The result is shown only in the page (with a *Copy insights* button) and is
+not saved anywhere — it disappears on reload.
+
+---
+
 ## What it doesn't do (yet)
 
 By design, this is a v1. Things it doesn't try to be:
@@ -141,6 +185,7 @@ app/
   layout.tsx           # Root shell, theme bootstrap, navigation, footer
   page.tsx             # Dashboard — net worth hero, metric tiles, charts
   entries/page.tsx     # Tabbed manager for the four entry kinds
+  insights/page.tsx    # Optional, opt-in AI Insights (BYO key)
   settings/page.tsx    # Backup / restore / demo / clear
   globals.css          # Tailwind v4 theme variables, light/dark, components
 components/
@@ -160,8 +205,11 @@ lib/
   finance.ts           # Pure functions: toMonthly, summarize, formatters
   useEntries.ts        # useSyncExternalStore hook + hydrated flag
   demo.ts              # Demo dataset (load from Settings)
+  insights.ts          # AI Insights — pure payload builder + OpenAI-compatible request
+  aiSettings.ts        # AI key / config storage helpers (session-default)
+  observations.ts      # Local, AI-free, plain-language insights for the dashboard
 scripts/
-  validate-finance.mjs # 38 assertions over the core logic
+  validate-finance.mjs # 55 assertions over the core, insights, and observations logic
 ```
 
 ---

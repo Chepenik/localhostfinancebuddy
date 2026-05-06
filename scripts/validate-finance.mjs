@@ -12,6 +12,8 @@ import {
   formatCurrencyCompact,
 } from "../lib/finance.ts";
 import { coerceEntry } from "../lib/types.ts";
+import { buildAiInsightsPayload, AI_SYSTEM_PROMPT } from "../lib/insights.ts";
+import { buildObservations } from "../lib/observations.ts";
 
 let passed = 0;
 let failed = 0;
@@ -234,6 +236,306 @@ check("accepts valid asset", () => {
   });
   assert.ok(out);
   assert.equal(out.kind, "asset");
+});
+
+console.log("\nbuildAiInsightsPayload");
+
+// Sensitive sample data — entry names and notes must never appear in the
+// payload that would be sent to an AI provider.
+const sensitiveEntries = [
+  {
+    id: "i1",
+    kind: "income",
+    name: "MEGA-EMPLOYER LLC payroll",
+    amount: 5000,
+    category: "Salary",
+    frequency: "monthly",
+    notes: "EMPLOYEE_ID_18472 secret",
+    createdAt: 0,
+    updatedAt: 0,
+  },
+  {
+    id: "e1",
+    kind: "expense",
+    name: "RENT for 123 Acacia Ave",
+    amount: 1500,
+    category: "Housing",
+    frequency: "monthly",
+    notes: "landlord-Mr-Smith",
+    createdAt: 0,
+    updatedAt: 0,
+  },
+  {
+    id: "a1",
+    kind: "asset",
+    name: "Chase Sapphire Checking ****4321",
+    amount: 5000,
+    category: "Checking",
+    notes: "routing-99887766",
+    createdAt: 0,
+    updatedAt: 0,
+  },
+  {
+    id: "l1",
+    kind: "liability",
+    name: "Amex Platinum balance",
+    amount: 1200,
+    category: "Credit Card",
+    notes: "card last 4: 1234",
+    createdAt: 0,
+    updatedAt: 0,
+  },
+];
+
+const SENSITIVE_TOKENS = [
+  "MEGA-EMPLOYER",
+  "EMPLOYEE_ID_18472",
+  "Acacia Ave",
+  "landlord-Mr-Smith",
+  "Chase Sapphire",
+  "4321",
+  "routing-99887766",
+  "Amex Platinum",
+  "card last 4",
+  "1234",
+];
+
+check("default payload has the expected top-level shape", () => {
+  const p = buildAiInsightsPayload(sensitiveEntries);
+  const keys = Object.keys(p).sort();
+  assert.deepEqual(keys, [
+    "debtToAssetRatio",
+    "entryCount",
+    "generatedAt",
+    "monthlyCashFlow",
+    "monthlyExpenses",
+    "monthlyIncome",
+    "netWorth",
+    "savingsRate",
+    "totalAssets",
+    "totalLiabilities",
+  ]);
+  assert.equal(typeof p.netWorth, "number");
+  assert.equal(typeof p.entryCount, "number");
+  assert.equal(typeof p.generatedAt, "string");
+  assert.match(p.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+check("default payload excludes raw entry names and notes", () => {
+  const p = buildAiInsightsPayload(sensitiveEntries);
+  const json = JSON.stringify(p);
+  for (const token of SENSITIVE_TOKENS) {
+    assert.equal(
+      json.includes(token),
+      false,
+      `payload leaked sensitive token: ${token}`,
+    );
+  }
+});
+
+check("includeCategories adds aggregates with only category/amount fields", () => {
+  const p = buildAiInsightsPayload(sensitiveEntries, { includeCategories: true });
+  assert.ok(Array.isArray(p.expenseCategories));
+  assert.ok(Array.isArray(p.assetCategories));
+  assert.ok(Array.isArray(p.liabilityCategories));
+  for (const c of p.expenseCategories) {
+    assert.deepEqual(Object.keys(c).sort(), ["category", "monthlyAmount"]);
+    assert.equal(typeof c.category, "string");
+    assert.equal(typeof c.monthlyAmount, "number");
+  }
+  for (const c of p.assetCategories) {
+    assert.deepEqual(Object.keys(c).sort(), ["amount", "category"]);
+  }
+  for (const c of p.liabilityCategories) {
+    assert.deepEqual(Object.keys(c).sort(), ["amount", "category"]);
+  }
+});
+
+check("includeCategories still excludes entry names and notes", () => {
+  const p = buildAiInsightsPayload(sensitiveEntries, { includeCategories: true });
+  const json = JSON.stringify(p);
+  for (const token of SENSITIVE_TOKENS) {
+    assert.equal(
+      json.includes(token),
+      false,
+      `payload leaked sensitive token even with categories: ${token}`,
+    );
+  }
+});
+
+check("empty entries → entryCount 0 and zero aggregates", () => {
+  const p = buildAiInsightsPayload([]);
+  assert.equal(p.entryCount, 0);
+  assert.equal(p.netWorth, 0);
+  assert.equal(p.monthlyIncome, 0);
+  assert.equal(p.monthlyExpenses, 0);
+  assert.equal(p.savingsRate, null);
+  assert.equal(p.debtToAssetRatio, null);
+});
+
+check("amounts are rounded to cents", () => {
+  // Weekly income of 100 → 100 * 52 / 12 = 433.3333… → rounded to 433.33
+  const p = buildAiInsightsPayload([
+    {
+      id: "x",
+      kind: "income",
+      name: "n/a",
+      amount: 100,
+      category: "Salary",
+      frequency: "weekly",
+      createdAt: 0,
+      updatedAt: 0,
+    },
+  ]);
+  assert.equal(p.monthlyIncome, Math.round(((100 * 52) / 12) * 100) / 100);
+});
+
+check("system prompt forbids investment advice", () => {
+  // Defensive check — if someone weakens the system prompt later, this fails.
+  assert.match(AI_SYSTEM_PROMPT, /not financial/i);
+  assert.match(AI_SYSTEM_PROMPT, /not.*investment/i);
+  assert.match(AI_SYSTEM_PROMPT, /Do not recommend/i);
+});
+
+console.log("\nbuildObservations");
+
+const obs = (entries) => buildObservations(entries);
+const ids = (list) => list.map((o) => o.id);
+
+check("zero entries → no observations", () => {
+  assert.deepEqual(obs([]), []);
+});
+
+check("few entries → onboarding nudge", () => {
+  const list = obs([e("asset", 1000)]);
+  assert.ok(ids(list).includes("few-entries"));
+});
+
+check("strong saver → positive cash-flow + savings-rate-strong", () => {
+  const list = obs([
+    e("income", 10000, { frequency: "monthly" }),
+    e("expense", 4000, { frequency: "monthly" }),
+    e("asset", 50000, { category: "Checking" }),
+    e("liability", 5000),
+  ]);
+  const got = ids(list);
+  assert.ok(got.includes("cash-flow-positive"));
+  assert.ok(got.includes("savings-rate-strong"));
+  assert.ok(got.includes("debt-low"));
+  // No "few-entries" warning when there are >=4 entries.
+  assert.ok(!got.includes("few-entries"));
+});
+
+check("spending exceeds income → warning observation", () => {
+  const list = obs([
+    e("income", 3000, { frequency: "monthly" }),
+    e("expense", 4000, { frequency: "monthly", category: "Housing" }),
+    e("asset", 1000, { category: "Checking" }),
+    e("liability", 100),
+  ]);
+  const got = ids(list);
+  assert.ok(got.includes("cash-flow-negative"));
+});
+
+check("emergency fund: only liquid assets count", () => {
+  const list = obs([
+    e("income", 5000, { frequency: "monthly" }),
+    e("expense", 4000, { frequency: "monthly" }),
+    // 100k in investments — NOT counted as liquid.
+    e("asset", 100000, { category: "Investments" }),
+    // 4k in checking — counted. 4k / 4k = 1.0 month → warning.
+    e("asset", 4000, { category: "Checking" }),
+  ]);
+  const note = list.find((o) => o.id === "emergency-fund");
+  assert.ok(note, "emergency-fund observation should be present");
+  assert.equal(note.tone, "warning");
+});
+
+check("emergency fund 6+ months → positive", () => {
+  const list = obs([
+    e("income", 5000, { frequency: "monthly" }),
+    e("expense", 1000, { frequency: "monthly" }),
+    e("asset", 50000, { category: "Savings Account" }),
+  ]);
+  const note = list.find((o) => o.id === "emergency-fund");
+  assert.ok(note);
+  assert.equal(note.tone, "positive");
+});
+
+check("expense concentration only flags >35% share", () => {
+  const dominant = obs([
+    e("income", 10000, { frequency: "monthly" }),
+    e("expense", 5000, { frequency: "monthly", category: "Housing" }),
+    e("expense", 200, { frequency: "monthly", category: "Food" }),
+    e("expense", 100, { frequency: "monthly", category: "Transport" }),
+  ]);
+  assert.ok(ids(dominant).includes("expense-concentration"));
+
+  // Largest category ≈ 30% of the total — under the 35% threshold.
+  const balanced = obs([
+    e("income", 10000, { frequency: "monthly" }),
+    e("expense", 900, { frequency: "monthly", category: "Housing" }),
+    e("expense", 800, { frequency: "monthly", category: "Food" }),
+    e("expense", 700, { frequency: "monthly", category: "Transport" }),
+    e("expense", 600, { frequency: "monthly", category: "Utilities" }),
+  ]);
+  assert.ok(!ids(balanced).includes("expense-concentration"));
+});
+
+check("one-time flow entries surface a reminder", () => {
+  const list = obs([
+    e("income", 5000, { frequency: "monthly" }),
+    e("income", 1500, { frequency: "one-time" }),
+    e("expense", 1000, { frequency: "monthly" }),
+    e("asset", 1000, { category: "Checking" }),
+  ]);
+  const note = list.find((o) => o.id === "one-time-note");
+  assert.ok(note);
+  assert.match(note.title, /1 one-time entry/);
+});
+
+check("debts but no assets surfaces an asset prompt", () => {
+  const list = obs([e("liability", 2000), e("liability", 500)]);
+  assert.ok(ids(list).includes("debt-no-assets"));
+});
+
+check("observations never contain raw entry name or notes", () => {
+  // Defensive: someone could later be tempted to template entry text into
+  // observation copy. Make sure that doesn't sneak in.
+  const list = obs([
+    {
+      id: "x",
+      kind: "expense",
+      name: "MEGA-LANDLORD-CO secret payment",
+      amount: 4000,
+      category: "Housing",
+      frequency: "monthly",
+      notes: "very-private-note-12345",
+      createdAt: 0,
+      updatedAt: 0,
+    },
+    {
+      id: "y",
+      kind: "income",
+      name: "MEGA-EMPLOYER",
+      amount: 5000,
+      category: "Salary",
+      frequency: "monthly",
+      notes: "secret-id-998877",
+      createdAt: 0,
+      updatedAt: 0,
+    },
+    e("asset", 5000, { category: "Checking" }),
+  ]);
+  const json = JSON.stringify(list);
+  for (const token of [
+    "MEGA-LANDLORD-CO",
+    "very-private-note-12345",
+    "MEGA-EMPLOYER",
+    "secret-id-998877",
+  ]) {
+    assert.equal(json.includes(token), false, `observations leaked: ${token}`);
+  }
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
